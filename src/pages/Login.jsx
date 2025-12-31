@@ -1,13 +1,47 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import bgImage from "../assets/bg.jpg";
 import logo from "../assets/logo-1.png"; 
 
-const Login = () => {
+const HRMLogin = () => {
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3500); 
+    return () => clearTimeout(timer);
+  }, []);
+
+  const getRedirectPath = (role) => {
+    const paths = {
+      "Admin": "/dashboard",
+      "HR": "/dashboard",
+      "Manager": "/dashboard",
+      "Employee": "/employee-dashboard"
+    };
+    return paths[role] || "/employee-dashboard";
+  };
+
+  useEffect(() => {
+    if (!showSplash) {
+      const savedRole = localStorage.getItem("userRole");
+      // Note: We check userRole instead of token because auth is now handled by HttpOnly Cookies
+      if (savedRole) {
+        navigate(getRedirectPath(savedRole));
+      }
+    }
+  }, [navigate, showSplash]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,81 +49,120 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:8080/api/auth/login", formData, {
-        withCredentials: true 
-      });
-      
+      // UPDATED: Sending as POST JSON Body to 8080 with Credentials for Cookies
+      const response = await axios.post(`http://localhost:8080/api/auth/login`, 
+        { 
+          username: formData.username, 
+          password: formData.password 
+        }, 
+        { 
+          withCredentials: true // Essential for the 'jwt' cookie from your Java Backend
+        }
+      );
+
       if (response.data) {
-        const { role, id, username } = response.data;
-        localStorage.setItem("userRole", role);
-        localStorage.setItem("userId", id);
-        localStorage.setItem("userName", username);
-        
-        if (role === "Admin" || role === "Manager") navigate("/project-performance");
-        else navigate("/employee-dashboard");
+        const user = response.data;
+
+        // Backend roles/status logic
+        localStorage.setItem("userRole", user.role);
+        localStorage.setItem("userId", user.id);
+        localStorage.setItem("userName", user.username);
+
+        navigate(getRedirectPath(user.role));
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed. Check server connection.");
+      console.error("Login Error:", err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setError("Invalid username or password.");
+      } else if (err.code === "ERR_NETWORK") {
+        setError("CORS Error or Backend Server is down (Port 8080).");
+      } else {
+        setError(err.response?.data?.message || "An unexpected error occurred.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const commonBackgroundStyle = {
+    backgroundImage: `linear-gradient(rgba(255, 253, 253, 0.68), rgba(5, 2, 31, 0.84)), url(${bgImage})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  };
+
+  if (showSplash) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" 
+           style={commonBackgroundStyle}>
+        <div className="absolute inset-0 z-0 opacity-40">
+           <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-400/20 blur-[100px] rounded-full animate-[float_10s_infinite_alternate]"></div>
+        </div>
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="animate-[scaleIn_1s_ease-out] p-6 bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-white/50">
+            <img src={logo} alt="DVein Logo" className="h-32 w-auto object-contain" />
+          </div>
+          <div className="mt-10 text-center">
+            <h1 className="text-4xl font-black text-white tracking-[0.5em] uppercase">DVein</h1>
+            <p className="mt-2 text-white text-[12px] font-bold tracking-[0.8em] uppercase opacity-90">Innovations</p>
+          </div>
+          <div className="mt-16 w-64 h-[3px] bg-white/20 rounded-full overflow-hidden relative">
+            <div className="absolute h-full bg-gradient-to-r from-transparent via-white to-transparent w-full animate-[shimmer_1.5s_infinite]"></div>
+          </div>
+        </div>
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes float { from { transform: translate(0,0); } to { transform: translate(5%, 10%); } }
+          @keyframes scaleIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+          @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        `}} />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-      {/* The Login Card */}
-      <div className="w-full max-w-[400px] p-10 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-        
-        {/* Branding Area */}
-        <div className="flex flex-col items-center mb-8">
-          <img src={logo} alt="Logo" className="h-9 mb-4 grayscale opacity-80" />
-          <h2 className="text-xl font-semibold text-slate-800 tracking-tight">Login to Dashboard</h2>
-          <p className="text-sm text-slate-400 mt-1">Enter your credentials to continue</p>
+    <div className="min-h-screen flex items-center justify-center p-4" style={commonBackgroundStyle}>
+      <div className="max-w-md w-full space-y-5 p-10 bg-white rounded-3xl shadow-2xl">
+        <div className="text-center">
+          <img src={logo} alt="Logo" className="h-16 mx-auto mb-4" />
+          <h2 className="text-3xl font-black text-gray-900 tracking-tighter">DVein Innovations</h2>
+          <p className="text-xs text-gray-500 font-medium uppercase tracking-widest">HRM Portal</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-3 bg-red-50 text-red-600 text-xs font-medium rounded-lg text-center border border-red-100">
+          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs text-center font-bold border border-red-100">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-[13px] font-medium text-slate-700 mb-1.5 ml-1">Username</label>
-            <input 
-              type="text" 
-              required
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder:text-slate-300"
-              placeholder="e.g. naveen_dev"
-              onChange={(e) => setFormData({...formData, username: e.target.value})} 
-            />
+            <label className="text-xs font-bold text-gray-400 ml-1 mb-1 block uppercase">Username</label>
+            <input name="username" type="text" required className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Enter username" value={formData.username} onChange={handleChange} />
           </div>
 
           <div>
-            <label className="block text-[13px] font-medium text-slate-700 mb-1.5 ml-1">Password</label>
-            <input 
-              type="password" 
-              required
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder:text-slate-300"
-              placeholder="••••••••"
-              onChange={(e) => setFormData({...formData, password: e.target.value})} 
-            />
+            <label className="text-xs font-bold text-gray-400 ml-1 mb-1 block uppercase">Password</label>
+            <input name="password" type="password" required className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="••••••••" value={formData.password} onChange={handleChange} />
           </div>
 
-          <button 
-            disabled={loading}
-            className="w-full bg-slate-900 hover:bg-black text-white py-3 rounded-lg font-medium text-sm transition-all mt-4 shadow-sm"
-          >
-            {loading ? "Please wait..." : "Sign In"}
+          {/* ADDED: Forgot Password Link */}
+          <div className="flex justify-end pr-1">
+            <button type="button" onClick={() => navigate("/forgot-password")} className="text-[11px] font-bold text-blue-600 hover:underline">
+              FORGOT PASSWORD?
+            </button>
+          </div>
+
+          <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl text-white font-bold text-sm transition-all shadow-lg active:scale-95 ${loading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700 shadow-blue-400/30"}`}>
+            {loading ? "AUTHENTICATING..." : "LOG IN"}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-          <span className="text-xs text-slate-400">DVein Innovations © 2025</span>
+        <div className="pt-4 border-t border-gray-100 text-center">
+          <p className="text-sm text-gray-600 font-medium">New User? <button type="button" onClick={() => navigate("/register")} className="text-blue-600 font-black hover:underline ml-1">Register Here</button></p>
         </div>
       </div>
     </div>
   );
 };
 
-export default Login;
+export default HRMLogin;
