@@ -25,27 +25,20 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // 1. Create user data - status "active" so they can login immediately
-      const userData = {
-        username: formData.username.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-        role: formData.role,
-        status: "active", // Direct access granted
-        id: `EMP${Math.floor(1000 + Math.random() * 9000)}`,
-        createdAt: new Date().toISOString()
-      };
+      // UPDATED: Post to Spring Boot (8080) with Credentials for Cookie Support
+      const response = await axios.post("http://localhost:8080/api/auth/register", formData, {
+        withCredentials: true
+      });
 
-      // 2. Post to JSON Server
-      const postResponse = await axios.post("http://localhost:5006/employees", userData);
-
-      if (postResponse.status === 201) {
-        alert("Registration Successful! You can now log in.");
+      // Backend status code validation
+      if (response.status === 200 || response.status === 201) {
+        alert("Registration Successful! Redirecting to login...");
         navigate("/login");
       }
     } catch (err) {
       console.error("API Error:", err);
-      alert("Backend connection failed! Make sure JSON Server is running on port 5006.");
+      const errorMsg = err.response?.data?.message || "Registration failed. Check server connection.";
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -54,7 +47,7 @@ const Register = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4"
       style={{ 
-        backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.7), rgba(180, 164, 164, 0.7)), url(${bgImage})`, 
+        backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.5), rgba(20, 13, 33, 0.84)), url(${bgImage})`, 
         backgroundSize: 'cover', 
         backgroundPosition: 'center' 
       }}>
