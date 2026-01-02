@@ -167,7 +167,7 @@ const Dashboard = () => {
                     />
                   </div>
                   <button 
-                    onClick={() => navigate("/training")}
+                    onClick={() => navigate("/employee/trainingsystem")}
                     className="w-full py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all"
                   >
                     Manage Hub

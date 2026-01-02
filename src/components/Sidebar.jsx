@@ -47,7 +47,7 @@ const Sidebar = () => {
   const menuItems = [
     { title: "Dashboard", icon: <LayoutDashboard size={18} />, path: "/dashboard" },
     { title: "Employee", icon: <Users size={18} />, path: "/employees" },
-    { title: "Training Hub", icon: <BookOpen size={18} />, path: "/training" }, // Added Training Hub
+    { title: "Training Hub", icon: <BookOpen size={18} />, path: "/employee/trainingsystem" }, // Added Training Hub
     { title: "Attendance", icon: <CalendarCheck size={18} />, path: "/attendance" },
     { title: "Leave", icon: <FileText size={18} />, path: "/admin/leaves" }, 
     { title: "Payroll", icon: <CreditCard size={18} />, path: "/payroll" },
