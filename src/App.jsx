@@ -8,7 +8,6 @@ import Dashboard from "./pages/Admin/Dashboard.jsx";
 import EmployeeDirectory from "./pages/Employee/EmployeeDirectory.jsx"; 
 import LeaveManagement from "./pages/Admin/LeaveManagement.jsx"; 
 import EmployeeLeave from "./pages/Employee/EmployeeLeave.jsx"; 
-// REMOVED: LoginApproval import
 import Recruitment from "./pages/Admin/Recruitment.jsx"; 
 import ProjectPerformance from "./pages/Admin/ProjectPerformance.jsx"; 
 import Setting from "./pages/Admin/Setting.jsx"; 
@@ -22,10 +21,15 @@ import Payroll from "./pages/Admin/Payroll.jsx";
 import Projects from "./pages/Employee/Projects.jsx";
 import EmployeeSetting from "./pages/Employee/EmployeeSetting.jsx";
 
+// CORRECTED PATH: Points to your specific local file location
+import TrainingSystem from "./pages/Employee/TrainingSystem.jsx"; 
+
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const userRole = localStorage.getItem("userRole");
-  if (!userRole) return <Navigate to="/login" replace />;
+  const token = localStorage.getItem("token");
+
+  if (!token) return <Navigate to="/login" replace />;
   
   if (!allowedRoles.includes(userRole)) {
     return (userRole === "Employee" || userRole === "TL") 
@@ -39,7 +43,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 const EmployeeLayout = ({ children }) => (
   <div className="flex">
     <EmployeeSidebar /> 
-    <div className="flex-1 ml-64 bg-slate-50 min-h-screen">
+    <div className="flex-1 lg:ml-64 bg-slate-50 min-h-screen">
       {children}
     </div>
   </div>
@@ -67,6 +71,13 @@ function App() {
           </ProtectedRoute>
         } />
 
+        {/* ADMIN VIEW FOR TRAINING (Assigning Courses) */}
+        <Route path="/training" element={
+          <ProtectedRoute allowedRoles={["Admin", "Manager", "HR"]}>
+            <TrainingSystem />
+          </ProtectedRoute>
+        } />
+
         <Route path="/project-performance" element={
           <ProtectedRoute allowedRoles={["Admin", "Manager", "HR"]}>
             <ProjectPerformance />
@@ -78,8 +89,6 @@ function App() {
             <AdminAttendance />
           </ProtectedRoute>
         } />
-
-        {/* REMOVED: /login-approval route */}
 
         <Route path="/recruitment" element={
           <ProtectedRoute allowedRoles={["Admin", "Manager", "HR"]}>
@@ -138,6 +147,15 @@ function App() {
           </ProtectedRoute>
         } />
 
+        {/* EMPLOYEE VIEW FOR TRAINING (Learning & Exams) */}
+        <Route path="/employee/training" element={
+          <ProtectedRoute allowedRoles={["Employee", "TL"]}>
+            <EmployeeLayout>
+              <TrainingSystem />
+            </EmployeeLayout>
+          </ProtectedRoute>
+        } />
+
         <Route path="/employee-setting" element={
           <ProtectedRoute allowedRoles={["Employee", "TL"]}>
             <EmployeeLayout>
@@ -146,7 +164,6 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* Catch-all Route */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

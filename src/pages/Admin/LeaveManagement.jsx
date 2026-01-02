@@ -12,35 +12,50 @@ const LeaveManagement = () => {
   const departments = ["Finance & Accounts", "Marketing", "IT", "Non-IT", "Operation", "others"];
   const leaveTypes = ["Sick Leave", "Casual Leave", "Emergency Leave", "Loss of Pay"];
 
+  // API Config to match your AuthController (port 8080 and withCredentials)
+  const api = axios.create({
+    baseURL: "http://localhost:8080/api/leaves",
+    withCredentials: true,
+  });
+
   useEffect(() => {
     fetchLeaves();
   }, []);
 
   const fetchLeaves = async () => {
     try {
-      // Backend api connect panni data eduka
-      const response = await axios.get("http://localhost:5006/leaves");
+      // Connecting to your LeaveController.java -> @GetMapping("/all")
+      const response = await api.get("/all");
       setLeaves(response.data);
     } catch (err) {
       console.error("Error fetching leaves", err);
     }
   };
 
-  const handleAction = async (id, newStatus) => {
+  const handleAction = async (id, action) => {
     try {
-      await axios.patch(`http://localhost:5006/leaves/${id}`, { status: newStatus });
-      alert(`Leave ${newStatus} Successfully!`);
-      fetchLeaves(); // Refresh data
+      // Connecting to your LeaveController.java -> @PostMapping("/approve/{id}") or /reject/{id}
+      const endpoint = action === "Approved" ? `/approve/${id}` : `/reject/${id}`;
+      await api.post(endpoint);
+      
+      alert(`Leave ${action} Successfully!`);
+      fetchLeaves(); // Refresh the table
     } catch (err) {
-      alert("Action failed!");
+      alert("Action failed! Check admin permissions.");
+      console.error(err);
     }
   };
 
   // --- SORTING & FILTERING LOGIC ---
+  // Note: Since Backend DTO uses 'leaveType' and 'status'
   const filteredLeaves = leaves.filter((leave) => {
     const matchesDept = filterDept === "All" || leave.department === filterDept;
-    const matchesType = filterType === "All" || leave.type === filterType;
-    const matchesSearch = leave.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === "All" || leave.leaveType === filterType;
+    
+    // Fallback to ID or EmployeeID if Name isn't in your current LeaveDTO
+    const searchTarget = leave.employeeId?.toString() || ""; 
+    const matchesSearch = searchTarget.includes(searchTerm.toLowerCase());
+    
     return matchesDept && matchesType && matchesSearch;
   });
 
@@ -59,7 +74,7 @@ const LeaveManagement = () => {
             <Search size={18} className="ml-2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search employee..." 
+              placeholder="Search by ID..." 
               className="outline-none bg-transparent text-sm p-2 w-48"
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -91,7 +106,7 @@ const LeaveManagement = () => {
           
           <div className="flex items-center gap-2 text-slate-400 px-4 border-l">
             <History size={18} />
-            <span className="text-xs font-bold uppercase tracking-tighter">History Enabled</span>
+            <span className="text-xs font-bold uppercase tracking-tighter">Backend Synced</span>
           </div>
         </div>
 
@@ -100,9 +115,9 @@ const LeaveManagement = () => {
           <table className="w-full text-left">
             <thead className="bg-[#1e293b] text-white">
               <tr>
-                <th className="p-6 text-[10px] font-black uppercase tracking-widest">Employee & Dept</th>
+                <th className="p-6 text-[10px] font-black uppercase tracking-widest">Employee ID</th>
                 <th className="p-6 text-[10px] font-black uppercase tracking-widest">Leave Details</th>
-                <th className="p-6 text-[10px] font-black uppercase tracking-widest">Dates & Duration</th>
+                <th className="p-6 text-[10px] font-black uppercase tracking-widest">Dates & Session</th>
                 <th className="p-6 text-[10px] font-black uppercase tracking-widest text-center">Status</th>
                 <th className="p-6 text-[10px] font-black uppercase tracking-widest text-center">Actions</th>
               </tr>
@@ -114,55 +129,58 @@ const LeaveManagement = () => {
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400"><User size={20}/></div>
                       <div>
-                        <p className="font-bold text-slate-800">{leave.name}</p>
-                        <p className="text-[10px] font-black text-blue-500 uppercase">{leave.department}</p>
+                        <p className="font-bold text-slate-800">EMP-{leave.employeeId}</p>
+                        <p className="text-[10px] font-bold text-blue-600 uppercase">Staff</p>
                       </div>
                     </div>
                   </td>
                   <td className="p-6">
-                    <p className="text-sm font-bold text-slate-700">{leave.type}</p>
-                    <p className="text-[11px] text-slate-400 italic">"{leave.reason}"</p>
+                    <p className="text-xs font-bold text-slate-700">{leave.leaveType}</p>
+                    <p className="text-[10px] text-slate-400 italic line-clamp-1">{leave.reason}</p>
                   </td>
                   <td className="p-6">
-                    <p className="text-xs font-bold text-slate-600">{leave.startDate} to {leave.endDate}</p>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">3 Days</span>
+                    <p className="text-xs font-bold text-slate-700">{leave.startDate} to {leave.endDate}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Session: {leave.session || "Full Day"}</p>
                   </td>
                   <td className="p-6 text-center">
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase border ${
-                      leave.status === "Approved" ? "bg-green-50 text-green-600 border-green-100" :
-                      leave.status === "Rejected" ? "bg-red-50 text-red-600 border-red-100" :
-                      "bg-amber-50 text-amber-600 border-amber-100"
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      leave.status === "PENDING" ? "bg-amber-100 text-amber-600" : 
+                      leave.status === "APPROVED" ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"
                     }`}>
                       {leave.status}
                     </span>
                   </td>
                   <td className="p-6">
-                    {leave.status === "Pending" ? (
+                    {leave.status === "PENDING" ? (
                       <div className="flex justify-center gap-2">
                         <button 
                           onClick={() => handleAction(leave.id, "Approved")}
-                          className="p-2 bg-green-600 text-white rounded-xl hover:bg-green-700 shadow-lg shadow-green-100 transition-all"
+                          className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all"
                         >
-                          <Check size={18}/>
+                          <Check size={16} />
                         </button>
                         <button 
                           onClick={() => handleAction(leave.id, "Rejected")}
-                          className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all"
+                          className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-lg shadow-red-200 transition-all"
                         >
-                          <X size={18}/>
+                          <X size={16} />
                         </button>
                       </div>
                     ) : (
-                      <div className="text-center text-[10px] font-black text-slate-300 uppercase italic">Decision Made</div>
+                      <p className="text-center text-[10px] font-bold text-slate-300 italic uppercase">Processed</p>
                     )}
                   </td>
                 </tr>
               ))}
+              {filteredLeaves.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="p-10 text-center text-slate-400 italic text-sm">
+                    No leave requests found matching your filters.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          {filteredLeaves.length === 0 && (
-            <div className="p-20 text-center text-slate-400 italic font-bold">No leave applications found for this filter.</div>
-          )}
         </div>
       </main>
     </div>

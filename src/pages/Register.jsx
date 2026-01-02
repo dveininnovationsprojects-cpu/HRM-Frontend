@@ -6,6 +6,7 @@ import bgImage from "../assets/bg.jpg";
 const Register = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); // Added to handle server error messages inline
 
   const [formData, setFormData] = useState({
     username: "",
@@ -14,31 +15,42 @@ const Register = () => {
     role: "" 
   });
 
+  // Backend URL Constant
+  const API_URL = "http://localhost:8080/api/auth";
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(""); // Clear previous errors
+
     if (!formData.role) return alert("Please select a role!");
 
     setLoading(true);
 
     try {
-      // UPDATED: Post to Spring Boot (8080) with Credentials for Cookie Support
-      const response = await axios.post("http://localhost:8080/api/auth/register", formData, {
-        withCredentials: true
+      // Logic synchronized with your Java Controller
+      const response = await axios.post(`${API_URL}/register`, formData, {
+        withCredentials: true // Support for HttpOnly cookies if backend sends them on register
       });
 
-      // Backend status code validation
+      // Based on your Controller: register returns AuthResponse
       if (response.status === 200 || response.status === 201) {
         alert("Registration Successful! Redirecting to login...");
         navigate("/login");
       }
     } catch (err) {
       console.error("API Error:", err);
-      const errorMsg = err.response?.data?.message || "Registration failed. Check server connection.";
-      alert(errorMsg);
+      
+      // FUNCTIONALITY UPDATE: Check if server is reachable
+      if (!err.response) {
+        setError("Server connection failed. Is the Backend Server running?");
+      } else {
+        const errorMsg = err.response.data?.message || "Registration failed.";
+        setError(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -61,6 +73,13 @@ const Register = () => {
             Create HRM Account
           </p>
         </div>
+
+        {/* Inline Error Display for Server/Validation Issues */}
+        {error && (
+          <div className="mb-4 bg-red-50 text-red-600 p-2.5 rounded-xl text-[11px] text-center font-bold border border-red-100">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <input 

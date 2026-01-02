@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import bgImage from "../assets/bg.jpg";
-import logo from "../assets/logo-1.png"; 
+import logo from "../assets/logo-1.png";
 
 const HRMLogin = () => {
   const [formData, setFormData] = useState({ username: "", password: "" });
@@ -11,10 +11,14 @@ const HRMLogin = () => {
   const [showSplash, setShowSplash] = useState(true);
   const navigate = useNavigate();
 
+  // API Base URL matches your Spring Boot Controller
+  const API_URL = "http://localhost:8080/api/auth";
+
+  // Splash Screen Timer
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 3500); 
+    }, 3500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -28,10 +32,10 @@ const HRMLogin = () => {
     return paths[role] || "/employee-dashboard";
   };
 
+  // Check for existing session after splash disappears
   useEffect(() => {
     if (!showSplash) {
       const savedRole = localStorage.getItem("userRole");
-      // Note: We check userRole instead of token because auth is now handled by HttpOnly Cookies
       if (savedRole) {
         navigate(getRedirectPath(savedRole));
       }
@@ -49,21 +53,21 @@ const HRMLogin = () => {
     setLoading(true);
 
     try {
-      // UPDATED: Sending as POST JSON Body to 8080 with Credentials for Cookies
-      const response = await axios.post(`http://localhost:8080/api/auth/login`, 
+      const response = await axios.post(`${API_URL}/login`, 
         { 
           username: formData.username, 
           password: formData.password 
         }, 
         { 
-          withCredentials: true // Essential for the 'jwt' cookie from your Java Backend
+          // CRITICAL: Allows browser to receive and send the 'jwt' HttpOnly cookie
+          withCredentials: true 
         }
       );
 
       if (response.data) {
         const user = response.data;
 
-        // Backend roles/status logic
+        // UI-level storage (Actual auth is in the HttpOnly Cookie)
         localStorage.setItem("userRole", user.role);
         localStorage.setItem("userId", user.id);
         localStorage.setItem("userName", user.username);
@@ -71,13 +75,15 @@ const HRMLogin = () => {
         navigate(getRedirectPath(user.role));
       }
     } catch (err) {
-      console.error("Login Error:", err);
-      if (err.response?.status === 401 || err.response?.status === 403) {
+      console.error("Connection Error:", err);
+      
+      // Error handling strictly for the Login UI
+      if (!err.response) {
+        setError("Server connection failed. Is the Backend Server running?");
+      } else if (err.response.status === 401 || err.response.status === 403) {
         setError("Invalid username or password.");
-      } else if (err.code === "ERR_NETWORK") {
-        setError("CORS Error or Backend Server is down (Port 8080).");
       } else {
-        setError(err.response?.data?.message || "An unexpected error occurred.");
+        setError(err.response.data?.message || "Something went wrong.");
       }
     } finally {
       setLoading(false);
@@ -91,6 +97,7 @@ const HRMLogin = () => {
     backgroundRepeat: 'no-repeat'
   };
 
+  // --- 1. SPLASH SCREEN (Clean - No Errors) ---
   if (showSplash) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden" 
@@ -100,7 +107,7 @@ const HRMLogin = () => {
         </div>
         <div className="relative z-10 flex flex-col items-center">
           <div className="animate-[scaleIn_1s_ease-out] p-6 bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-white/50">
-            <img src={logo} alt="DVein Logo" className="h-32 w-auto object-contain" />
+            <img src={logo} alt="DVein Logo" className="h-25 w-auto object-contain" />
           </div>
           <div className="mt-10 text-center">
             <h1 className="text-4xl font-black text-white tracking-[0.5em] uppercase">DVein</h1>
@@ -119,6 +126,7 @@ const HRMLogin = () => {
     );
   }
 
+  // --- 2. LOGIN FORM (Handles Error Messaging) ---
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={commonBackgroundStyle}>
       <div className="max-w-md w-full space-y-5 p-10 bg-white rounded-3xl shadow-2xl">
@@ -128,8 +136,9 @@ const HRMLogin = () => {
           <p className="text-xs text-gray-500 font-medium uppercase tracking-widest">HRM Portal</p>
         </div>
 
+        {/* Server Errors shown here only */}
         {error && (
-          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs text-center font-bold border border-red-100">
+          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-[11px] text-center font-bold border border-red-100">
             {error}
           </div>
         )}
@@ -137,32 +146,63 @@ const HRMLogin = () => {
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="text-xs font-bold text-gray-400 ml-1 mb-1 block uppercase">Username</label>
-            <input name="username" type="text" required className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="Enter username" value={formData.username} onChange={handleChange} />
+            <input 
+              name="username" 
+              type="text" 
+              required 
+              className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" 
+              placeholder="Enter username" 
+              value={formData.username} 
+              onChange={handleChange} 
+            />
           </div>
 
           <div>
             <label className="text-xs font-bold text-gray-400 ml-1 mb-1 block uppercase">Password</label>
-            <input name="password" type="password" required className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" placeholder="••••••••" value={formData.password} onChange={handleChange} />
+            <input 
+              name="password" 
+              type="password" 
+              required 
+              className="block w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" 
+              placeholder="••••••••" 
+              value={formData.password} 
+              onChange={handleChange} 
+            />
           </div>
 
-          {/* ADDED: Forgot Password Link */}
           <div className="flex justify-end pr-1">
-            <button type="button" onClick={() => navigate("/forgot-password")} className="text-[11px] font-bold text-blue-600 hover:underline">
+            <button 
+              type="button" 
+              onClick={() => navigate("/forgot-password")} 
+              className="text-[11px] font-bold text-blue-600 hover:underline"
+            >
               FORGOT PASSWORD?
             </button>
           </div>
 
-          <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl text-white font-bold text-sm transition-all shadow-lg active:scale-95 ${loading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700 shadow-blue-400/30"}`}>
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className={`w-full py-4 rounded-xl text-white font-bold text-sm transition-all shadow-lg active:scale-95 ${loading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700 shadow-blue-400/30"}`}
+          >
             {loading ? "AUTHENTICATING..." : "LOG IN"}
           </button>
         </form>
 
         <div className="pt-4 border-t border-gray-100 text-center">
-          <p className="text-sm text-gray-600 font-medium">New User? <button type="button" onClick={() => navigate("/register")} className="text-blue-600 font-black hover:underline ml-1">Register Here</button></p>
+          <p className="text-sm text-gray-600 font-medium">
+            New User? 
+            <button 
+              type="button" 
+              onClick={() => navigate("/register")} 
+              className="text-blue-600 font-black hover:underline ml-1"
+            >
+              Register Here
+            </button>
+          </p>
         </div>
       </div>
     </div>
   );
 };
-
 export default HRMLogin;

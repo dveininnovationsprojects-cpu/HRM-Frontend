@@ -2,19 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
-  User, Lock, Moon, Sun, Save, ShieldCheck, 
-  Monitor, Camera, ArrowLeft, Mail, Briefcase, 
-  BadgeCheck, Smartphone, Key, Loader2
+  User, Lock, Moon, Sun, Monitor, ArrowLeft, Smartphone, Key, Loader2
 } from 'lucide-react';
 
 const API_BASE_URL = "http://localhost:8080/api";
+
+// Create axios instance for cleaner code and CORS credential support
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true, 
+});
 
 const EmployeeSetting = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   
-  // 1. THEME STATE (LocalStorage la irunthu load aagum)
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
@@ -23,11 +26,9 @@ const EmployeeSetting = () => {
     username: "", email: "", role: "", department: "", employeeID: ""
   });
 
-  // 2. SECURITY STATES
   const [passwords, setPasswords] = useState({ old: "", new: "", confirm: "" });
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
 
-  // Apply Theme Effect (Body tag la dark class add pannum)
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -38,25 +39,32 @@ const EmployeeSetting = () => {
     }
   }, [isDarkMode]);
 
-  // Fetch Profile on Load
+  // FETCH PROFILE - Connected to backend /users/profile/{id}
   useEffect(() => {
     const fetchProfile = async () => {
+      setLoading(true);
       try {
         const userId = localStorage.getItem("userId");
         const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_BASE_URL}/users/profile/${userId}`, {
+        
+        // Backend Validation Check
+        const res = await api.get(`/users/profile/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
         setProfile(res.data);
+        // Map backend boolean to state
         setIs2FAEnabled(res.data.twoFactorEnabled || false);
       } catch (err) { 
-        console.error("Profile Fetch Error:", err); 
+        console.error("Backend Profile Fetch Error:", err); 
+      } finally {
+        setLoading(false);
       }
     };
-    fetchProfile();
+    if(localStorage.getItem("userId")) fetchProfile();
   }, []);
 
-  // 3. PASSWORD CHANGE LOGIC
+  // PASSWORD UPDATE - Connected to backend /users/change-password
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (passwords.new !== passwords.confirm) {
@@ -67,43 +75,52 @@ const EmployeeSetting = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      await axios.put(`${API_BASE_URL}/users/change-password`, {
+      const userId = localStorage.getItem("userId");
+
+      // Sending data aligned with Backend DTO
+      await api.put(`/users/change-password`, {
+        userId: userId, // Some backends require userId in body
         currentPassword: passwords.old,
         newPassword: passwords.new
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
       alert("Password updated successfully!");
       setPasswords({ old: "", new: "", confirm: "" });
     } catch (err) { 
-      alert(err.response?.data?.message || "Password update failed."); 
+      const errorMsg = err.response?.data?.message || "Password update failed.";
+      alert(errorMsg); 
     } finally { 
       setLoading(false); 
     }
   };
 
-  // 4. 2FA TOGGLE WITH EMAIL TRIGGER LOGIC
+  // 2FA TOGGLE - Connected to backend /users/toggle-2fa
   const toggle2FA = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       const userId = localStorage.getItem("userId");
       
-      // Backend API call - Ithu backend la mail trigger pannum
-      const response = await axios.post(`${API_BASE_URL}/users/toggle-2fa`, 
-        { userId, enabled: !is2FAEnabled }, 
+      // Ithu backend la status update pannum + email notification trigger pannum
+      const response = await api.post(`/users/toggle-2fa`, 
+        { 
+          userId: userId, 
+          enabled: !is2FAEnabled 
+        }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.status === 200) {
         setIs2FAEnabled(!is2FAEnabled);
         const msg = !is2FAEnabled 
-          ? "2FA Enabled! Check your email for confirmation." 
-          : "2FA Disabled successfully.";
+          ? "Two-Factor Authentication is now ENABLED. Please check your email." 
+          : "Two-Factor Authentication has been DISABLED.";
         alert(msg);
       }
     } catch (err) { 
-      alert("Security update failed. Please try again."); 
+      alert("Failed to update security settings. Please verify your connection."); 
     } finally { 
       setLoading(false); 
     }
@@ -112,7 +129,6 @@ const EmployeeSetting = () => {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-[#f8fafc] text-slate-900'}`}>
       
-      {/* NAVIGATION BAR */}
       <nav className={`border-b px-8 py-4 sticky top-0 z-50 transition-colors ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-sm'}`}>
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -160,7 +176,6 @@ const EmployeeSetting = () => {
               </div>
             )}
 
-            {/* TAB 1: PROFILE */}
             {activeTab === 'profile' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <h3 className="text-2xl font-black mb-8">Personal Information</h3>
@@ -175,17 +190,16 @@ const EmployeeSetting = () => {
                    </div>
                    <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Department</label>
-                      <input type="text" readOnly value={profile.department} className={`w-full p-4 rounded-2xl outline-none font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-50'}`} />
+                      <input type="text" readOnly value={profile.department || "General"} className={`w-full p-4 rounded-2xl outline-none font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-50'}`} />
                    </div>
                    <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Employee ID</label>
-                      <input type="text" readOnly value={profile.employeeID} className={`w-full p-4 rounded-2xl outline-none font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-50'}`} />
+                      <input type="text" readOnly value={profile.employeeID || userId} className={`w-full p-4 rounded-2xl outline-none font-bold ${isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-50'}`} />
                    </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 2: SECURITY (PASSWORD & 2FA) */}
             {activeTab === 'security' && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-12">
                 <section>
@@ -197,6 +211,7 @@ const EmployeeSetting = () => {
                         required 
                         className={`w-full p-4 rounded-xl outline-none transition-all focus:ring-2 ring-indigo-500 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`} 
                         onChange={e => setPasswords({...passwords, old: e.target.value})} 
+                        value={passwords.old}
                     />
                     <input 
                         type="password" 
@@ -204,6 +219,7 @@ const EmployeeSetting = () => {
                         required 
                         className={`w-full p-4 rounded-xl outline-none transition-all focus:ring-2 ring-indigo-500 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`} 
                         onChange={e => setPasswords({...passwords, new: e.target.value})} 
+                        value={passwords.new}
                     />
                     <input 
                         type="password" 
@@ -211,6 +227,7 @@ const EmployeeSetting = () => {
                         required 
                         className={`w-full p-4 rounded-xl outline-none transition-all focus:ring-2 ring-indigo-500 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`} 
                         onChange={e => setPasswords({...passwords, confirm: e.target.value})} 
+                        value={passwords.confirm}
                     />
                     <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
                         Update Password
@@ -220,14 +237,13 @@ const EmployeeSetting = () => {
 
                 <hr className={isDarkMode ? 'border-slate-800' : 'border-slate-100'} />
 
-                {/* 2FA EMAIL TOGGLE */}
                 <section className={`p-8 rounded-[2rem] border-2 transition-all ${is2FAEnabled ? 'border-green-500/50 bg-green-500/5' : 'border-slate-200 dark:border-slate-800'}`}>
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div className="flex gap-4">
                       <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-500/30"><Smartphone size={28}/></div>
                       <div>
                         <h4 className="font-black text-lg">Two-Step Verification</h4>
-                        <p className="text-sm text-slate-500 max-w-xs">Enable this to receive a secure code via email every time you log in.</p>
+                        <p className="text-sm text-slate-500 max-w-xs">Receive a secure code via email every time you log in to your account.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -246,7 +262,6 @@ const EmployeeSetting = () => {
               </div>
             )}
 
-            {/* TAB 3: APPEARANCE (THEME) */}
             {activeTab === 'appearance' && (
               <div className="animate-in fade-in duration-500">
                  <h3 className="text-2xl font-black mb-8">Interface Theme</h3>
@@ -257,7 +272,7 @@ const EmployeeSetting = () => {
                     >
                       <Sun className={`mb-4 ${!isDarkMode ? 'text-indigo-600' : 'text-slate-400'}`} size={48}/>
                       <h4 className="font-black text-lg">Light Mode</h4>
-                      <p className="text-xs text-slate-500 mt-1">Best for bright environments</p>
+                      <p className="text-xs text-slate-500 mt-1">Ideal for bright workspaces</p>
                     </button>
                     
                     <button 
@@ -266,7 +281,7 @@ const EmployeeSetting = () => {
                     >
                       <Moon className={`mb-4 ${isDarkMode ? 'text-indigo-400' : 'text-slate-400'}`} size={48}/>
                       <h4 className="font-black text-lg">Dark Mode</h4>
-                      <p className="text-xs text-slate-500 mt-1">Easier on the eyes at night</p>
+                      <p className="text-xs text-slate-500 mt-1">Comfortable for nighttime use</p>
                     </button>
                  </div>
               </div>

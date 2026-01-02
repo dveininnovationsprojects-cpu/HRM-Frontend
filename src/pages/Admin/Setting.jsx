@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from "../../components/Sidebar.jsx"; 
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios'; // Import Axios
+import axios from 'axios'; 
 import { 
   User, Lock, Bell, Moon, Sun, Save, ShieldCheck, Home, 
   Monitor, Building2, History, ChevronRight
 } from 'lucide-react';
 
-const API_BASE_URL = "http://localhost:5000/api"; // Unga backend URL inga kudunga
+const API_BASE_URL = "http://localhost:8081/api"; // Updated to your Spring Boot port
 
 const Setting = () => {
   const navigate = useNavigate();
@@ -15,35 +15,43 @@ const Setting = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Profile State - Initial empty values
+  // Profile State mapped to your EmployeeDTO.java
   const [profile, setProfile] = useState({
-    username: "",
-    email: "",
-    role: "",
+    fullName: "",
+    email: "", // From UserDTO
+    role: "",  // From UserDTO
     department: "",
-    employeeID: ""
+    position: "",
+    id: "", // employeeId
+    address: ""
   });
 
-  // Password State
+  // Password State mapped to ChangePasswordRequest.java
   const [passwords, setPasswords] = useState({
-    currentPassword: "",
+    oldPassword: "",
     newPassword: ""
   });
 
-  // 1. BACKEND FETCH: Component load aagum podhu user data edukka
+  // 1. FETCH PROFILE: Using your EmployeeController endpoints
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
         setLoading(true);
-        // Local storage-la irunthu user ID or Token eduthu fetch pannanum
-        const userId = localStorage.getItem("userId"); 
-        const token = localStorage.getItem("token");
-
-        const response = await axios.get(`${API_BASE_URL}/users/profile/${userId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Assuming you store username or userId in localStorage during login
+        const username = localStorage.getItem("username"); 
         
-        setProfile(response.data);
+        // Step A: Get Employee details via your backend
+        // Note: You might need a "get-me" endpoint or use the ID stored in login
+        const empId = localStorage.getItem("employeeId"); 
+        const response = await axios.get(`${API_BASE_URL}/employees/${empId}`);
+        
+        setProfile({
+          ...response.data,
+          fullName: response.data.fullName,
+          department: response.data.department,
+          position: response.data.position,
+          id: response.data.id
+        });
       } catch (error) {
         console.error("Error fetching profile:", error);
       } finally {
@@ -54,35 +62,47 @@ const Setting = () => {
     fetchUserProfile();
   }, []);
 
-  // 2. BACKEND UPDATE: Profile settings save panna
+  // 2. SAVE PROFILE: Using EmployeeController PUT /{id}
   const handleSaveProfile = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(`${API_BASE_URL}/users/update-profile`, profile, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Mapping to your EmployeeDTO structure
+      const updateData = {
+        fullName: profile.fullName,
+        department: profile.department,
+        position: profile.position,
+        address: profile.address,
+        phone: profile.phone
+      };
+
+      await axios.put(`${API_BASE_URL}/employees/${profile.id}`, updateData);
       alert("Profile updated successfully!");
     } catch (error) {
-      alert("Failed to update profile.");
+      alert("Failed to update profile. Check console for details.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. BACKEND UPDATE: Password change panna
+  // 3. CHANGE PASSWORD: Using your ChangePasswordRequest DTO
+  // Note: Ensure your AuthController has a change-password mapping
   const handleChangePassword = async () => {
-    if (!passwords.newPassword) return alert("Please enter new password");
+    if (!passwords.newPassword || !passwords.oldPassword) {
+        return alert("Please fill all password fields");
+    }
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(`${API_BASE_URL}/users/change-password`, passwords, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // This matches your ChangePasswordRequest.java fields
+      const requestBody = {
+        oldPassword: passwords.oldPassword,
+        newPassword: passwords.newPassword
+      };
+      
+      await axios.post(`${API_BASE_URL}/auth/change-password`, requestBody);
       alert("Password updated successfully!");
-      setPasswords({ currentPassword: "", newPassword: "" });
+      setPasswords({ oldPassword: "", newPassword: "" });
     } catch (error) {
-      alert("Error updating password.");
+      alert("Error updating password. Verify your current password.");
     } finally {
       setLoading(false);
     }
@@ -112,7 +132,6 @@ const Setting = () => {
         </header>
 
         <div className="flex gap-10">
-          {/* VERTICAL NAV */}
           <div className="w-72 space-y-1">
             {[
               { id: 'profile', label: 'My Profile', icon: <User size={18}/> },
@@ -140,7 +159,6 @@ const Setting = () => {
             ))}
           </div>
 
-          {/* DYNAMIC CONTENT BOX */}
           <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-100/50 p-12 overflow-hidden relative">
             
             {loading && (
@@ -153,25 +171,25 @@ const Setting = () => {
               <div className="animate-in fade-in duration-500">
                 <div className="flex items-center gap-6 mb-10">
                    <div className="w-24 h-24 rounded-full bg-blue-50 border-4 border-white shadow-lg flex items-center justify-center text-blue-600 text-2xl font-black">
-                     {profile.username?.substring(0, 2).toUpperCase() || "AD"}
+                     {profile.fullName?.substring(0, 2).toUpperCase() || "JD"}
                    </div>
                    <div>
-                     <h3 className="text-2xl font-black text-slate-900">{profile.username || "Loading..."}</h3>
-                     <p className="text-slate-400 font-medium">{profile.role} • {profile.department}</p>
+                     <h3 className="text-2xl font-black text-slate-900">{profile.fullName || "Loading..."}</h3>
+                     <p className="text-slate-400 font-medium">{profile.position} • {profile.department}</p>
                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-8 mb-10">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Employee ID</label>
-                    <input type="text" value={profile.employeeID} disabled className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-500 cursor-not-allowed" />
+                    <input type="text" value={profile.id || ""} disabled className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-500 cursor-not-allowed" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email Address</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Full Name</label>
                     <input 
                       type="text" 
-                      value={profile.email} 
-                      onChange={(e) => setProfile({...profile, email: e.target.value})}
+                      value={profile.fullName || ""} 
+                      onChange={(e) => setProfile({...profile, fullName: e.target.value})}
                       className="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 focus:ring-2 focus:ring-blue-100 transition-all outline-none" 
                     />
                   </div>
@@ -193,13 +211,13 @@ const Setting = () => {
                 <div className="space-y-6 max-w-md">
                   <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-4 mb-6">
                     <ShieldCheck className="text-emerald-500" />
-                    <p className="text-xs font-bold text-emerald-800">Two-Factor Authentication is currently ACTIVE.</p>
+                    <p className="text-xs font-bold text-emerald-800">Security: Use a strong password for your account.</p>
                   </div>
                   <input 
                     type="password" 
                     placeholder="Current Password" 
-                    value={passwords.currentPassword}
-                    onChange={(e) => setPasswords({...passwords, currentPassword: e.target.value})}
+                    value={passwords.oldPassword}
+                    onChange={(e) => setPasswords({...passwords, oldPassword: e.target.value})}
                     className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-100 transition-all" 
                   />
                   <input 
@@ -219,7 +237,6 @@ const Setting = () => {
               </div>
             )}
 
-            {/* Intha tabs-la existing code appadiye use pannikalam */}
             {activeTab === 'logs' && (
               <div className="animate-in fade-in duration-500">
                 <h3 className="text-xl font-black text-slate-900 mb-6">Security Audit Logs</h3>

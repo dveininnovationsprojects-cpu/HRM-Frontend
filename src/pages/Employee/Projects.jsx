@@ -6,9 +6,12 @@ import {
 } from 'lucide-react';
 
 const API_URL = "http://localhost:8080/api";
-const token = localStorage.getItem("token");
-const userRole = localStorage.getItem("userRole"); 
-const userId = localStorage.getItem("userId");
+
+// Create axios instance to handle Cookies/CORS consistently
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true, // Crucial for Cookie-based CORS validation
+});
 
 const Projects = () => {
   const [tasks, setTasks] = useState([]);
@@ -16,53 +19,88 @@ const Projects = () => {
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [statusUpdate, setStatusUpdate] = useState("");
+  
+  // States aligned with Backend Entity
   const [newAssignment, setNewAssignment] = useState({
-    projectId: '', moduleName: '', employeeId: '', estimatedHours: '', startDate: '', endDate: ''
+    projectId: '', 
+    moduleName: '', 
+    employeeId: '', 
+    estimatedHours: '', 
+    startDate: '', 
+    endDate: ''
   });
+
+  const token = localStorage.getItem("token");
+  const userRole = localStorage.getItem("userRole"); 
+  const userId = localStorage.getItem("userId");
+
+  const getHeaders = () => ({ Authorization: `Bearer ${token}` });
 
   useEffect(() => {
     fetchData();
     if (userRole === 'TL') fetchAdminProjects();
   }, []);
 
+  // 1. Fetching Tasks based on Role
   const fetchData = async () => {
     try {
+      // Dynamic routing based on role context
       const endpoint = userRole === 'TL' ? '/tl/team-tasks' : `/employee/my-tasks/${userId}`;
-      const res = await axios.get(`${API_URL}${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(endpoint, { headers: getHeaders() });
       setTasks(res.data);
-    } catch (err) { console.error("Error fetching data:", err); }
+    } catch (err) { 
+      console.error("Fetch Tasks Error:", err); 
+    }
   };
 
+  // 2. Fetch Projects uploaded by Admin (for TL Assignment)
   const fetchAdminProjects = async () => {
     try {
-      const res = await axios.get(`${API_URL}/admin/projects-list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/admin/projects-list', { headers: getHeaders() });
       setProjectsDropdown(res.data);
-    } catch (err) { console.error("Error fetching admin projects:", err); }
+    } catch (err) { 
+      console.error("Admin Projects Fetch Error:", err); 
+    }
   };
 
+  // 3. Post Daily Update (Employee Work)
   const handleUpdateStatus = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_URL}/projects/daily-update`, {
+      await api.post('/projects/daily-update', {
         taskId: selectedTask.id,
         updateText: statusUpdate,
-        updatedBy: userId
-      }, { headers: { Authorization: `Bearer ${token}` } });
+        updatedBy: userId,
+        updateDate: new Date().toISOString().split('T')[0] // Backend friendly date
+      }, { headers: getHeaders() });
       
       setStatusUpdate("");
       setSelectedTask(null);
+      fetchData(); // Refresh list to show new 'lastUpdate'
+    } catch (err) { 
+      alert(err.response?.data?.message || "Failed to post status update."); 
+    }
+  };
+
+  // 4. TL Assign Module Logic
+  const handleAssignTask = async (e) => {
+    e.preventDefault();
+    try {
+      // Logic to send new assignment to backend
+      await api.post('/tl/assign-task', newAssignment, { headers: getHeaders() });
+      alert("Task successfully assigned to resource!");
+      setShowAssignForm(false);
+      setNewAssignment({ projectId: '', moduleName: '', employeeId: '', estimatedHours: '', startDate: '', endDate: '' });
       fetchData();
-    } catch (err) { alert("Failed to post update."); }
+    } catch (err) {
+      alert("Assignment failed. Check Resource ID or Project status.");
+    }
   };
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* 1. Header & Notification */}
+      {/* Header & Notification */}
       <div className="flex justify-between items-end mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">PROJECT TRACKER</h1>
@@ -82,34 +120,52 @@ const Projects = () => {
         )}
       </div>
 
-      {/* 2. TL Assign Form */}
+      {/* TL Assign Form */}
       {showAssignForm && userRole === 'TL' && (
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm mb-10 animate-in fade-in slide-in-from-top-4">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             <Layout className="text-indigo-600" size={20}/> New Task Assignment
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Select Project</label>
-              <select className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 font-medium text-sm">
-                <option>Choose from Admin Uploads...</option>
-                {projectsDropdown.map(p => <option key={p.id}>{p.projectName}</option>)}
-              </select>
+          <form onSubmit={handleAssignTask}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Select Project</label>
+                <select 
+                  className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 font-medium text-sm"
+                  onChange={(e) => setNewAssignment({...newAssignment, projectId: e.target.value})}
+                  required
+                >
+                  <option value="">Choose from Admin Uploads...</option>
+                  {projectsDropdown.map(p => <option key={p.id} value={p.id}>{p.projectName}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Module Title</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Backend Integration" 
+                  className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-sm"
+                  onChange={(e) => setNewAssignment({...newAssignment, moduleName: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Assign To (Emp ID)</label>
+                <input 
+                  type="text" 
+                  placeholder="EMP-102" 
+                  className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-sm"
+                  onChange={(e) => setNewAssignment({...newAssignment, employeeId: e.target.value})}
+                  required
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Module Title</label>
-              <input type="text" placeholder="e.g. Backend Integration" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-sm"/>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Assign To (Emp ID)</label>
-              <input type="text" placeholder="EMP-102" className="w-full p-4 bg-slate-50 border-none rounded-2xl outline-none focus:ring-2 ring-indigo-500 text-sm"/>
-            </div>
-          </div>
-          <button className="mt-8 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all w-full md:w-auto">Confirm & Dispatch</button>
+            <button type="submit" className="mt-8 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold hover:bg-indigo-600 transition-all w-full md:w-auto">Confirm & Dispatch</button>
+          </form>
         </div>
       )}
 
-      {/* 3. Tasks Table */}
+      {/* Tasks Table */}
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left">
           <thead>
@@ -160,7 +216,7 @@ const Projects = () => {
         </table>
       </div>
 
-      {/* 4. Update Modal */}
+      {/* Update Modal */}
       {selectedTask && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-4">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
